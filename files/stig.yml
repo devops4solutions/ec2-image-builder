@@ -1,0 +1,137 @@
+name: 'STIG-Build-Linux'
+description: 'Applies STIG hardening for Linux OS. Customized defaults.'
+schemaVersion: 1.0
+constants:
+  - FileName:
+      type: string
+      value: 'LinuxAWSConfigureSTIG.tgz'
+  - ExecutableName:
+      type: string
+      value: 'main.sh'
+
+parameters:
+  - Level:
+      type: string
+      default: 'High' # Set your desired default here
+      description: "(Optional) Specify the STIG level. Default is High."
+      allowedValues:
+        - 'High'
+        - 'Medium'
+        - 'Low'
+  - InstallPackages:
+      type: string
+      default: 'Yes' # Set to 'Yes' or 'No'
+      description: "(Optional) Installs the required STIG packages for maximum compliance. Default is Yes."
+      allowedValues:
+        - 'Yes'
+        - 'No'
+  - SetDoDConsentBanner:
+      type: string
+      default: 'Yes' # Set to 'Yes' or 'No'
+      description: "(Optional) Sets the DoD consent banner. Default is Yes."
+      allowedValues:
+        - 'Yes'
+        - 'No'
+
+phases:
+  - name: build
+    steps:
+      - name: GetWorkingDirectory
+        action: ExecuteBash
+        inputs:
+          commands:
+            - "echo ${WORKING_DIRECTORY}"
+
+      - name: DeterminePackageManager
+        action: ExecuteBash
+        if:
+          fileExists: '/etc/os-release'
+          else: Abort
+        inputs:
+          commands:
+            - |
+              FILE=/etc/os-release
+              . $FILE
+              RELEASE="$ID${VERSION_ID:+.${VERSION_ID}}"
+              case "${RELEASE}" in
+                amzn.*|centos.*|rhel.*)
+                  echo yum
+                  ;;
+                ubuntu.*)
+                  echo apt
+                  ;;
+                *)
+                  echo "Operating System '${RELEASE}' is not supported. Exiting."
+                  exit 1
+                  ;;
+              esac
+
+      - name: HandleTarPrerequisite
+        action: ExecuteBash
+        if:
+          not:
+            binaryExists: "tar"
+            then: Execute
+            else: Skip
+        inputs:
+          commands:
+            - |
+              PACKAGE_MANAGER='{{build.DeterminePackageManager.outputs.stdout}}'
+              "${PACKAGE_MANAGER}" install -y tar || {
+                echo "Failed to install tar package prerequisite. Failing."
+                exit 1
+              }
+              TAR_INSTALLED="true"
+              echo $TAR_INSTALLED
+
+      - name: DownloadSTIG
+        action: S3Download
+        inputs:
+          - source: s3://aws-windows-downloads-us-east-1/STIG/Linux/Latest/{{ FileName }}
+            destination: '{{ build.GetWorkingDirectory.outputs.stdout }}/{{ FileName }}'
+
+      - name: UntarSTIG
+        action: ExecuteBash
+        inputs:
+          commands:
+            - |
+              INSTALLED_TAR='{{build.HandleTarPrerequisite.outputs.stdout}}'
+              PACKAGE_MANAGER='{{build.DeterminePackageManager.outputs.stdout}}'
+              sudo tar -xvf "{{ build.GetWorkingDirectory.outputs.stdout }}/{{ FileName }}" --strip-components 1 --directory "{{ build.GetWorkingDirectory.outputs.stdout }}/"
+              if [ $(echo $?) = 0 ]; then
+                [ "$INSTALLED_TAR" == "true" ] && $PACKAGE_MANAGER remove -y tar
+                exit 0
+              else
+                echo "File extraction failed. Exiting"
+                [ "$INSTALLED_TAR" == "true" ] && $PACKAGE_MANAGER remove -y tar
+                exit 1
+              fi
+
+      - name: ExecuteSTIG
+        action: ExecuteBash
+        onFailure: Continue
+        maxAttempts: 5
+        inputs:
+          commands:
+            - |
+              cd "{{ build.GetWorkingDirectory.outputs.stdout }}"
+              bash {{ ExecutableName }} -d "./" -l "{{ Level }}" -h "{{ InstallPackages }}" -s "{{ SetDoDConsentBanner }}" && exit 0 || {
+                echo "Failed to execute STIG."
+                exit 1
+              }
+      - name: AllowAppPortsInFirewalld
+        action: ExecuteBash
+        inputs:
+          commands:
+            - sudo firewall-cmd --permanent --add-port=3000/tcp
+            - sudo firewall-cmd --permanent --add-port=8000/tcp
+            - sudo firewall-cmd --reload
+     
+      - name: Cleanup
+        action: DeleteFolder
+        inputs:
+          - path: "{{ build.GetWorkingDirectory.outputs.stdout }}/{{ FileName }}"
+            force: true
+
+      - name: SystemReboot
+        action: Reboot

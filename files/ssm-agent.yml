@@ -1,0 +1,33 @@
+name: Install-SSM-Agent
+description: Installs and verifies AWS Systems Manager (SSM) Agent on Linux
+schemaVersion: 1.0
+
+phases:
+  - name: install
+    steps:
+      - name: InstallSSMAgent
+        action: ExecuteBash
+        inputs:
+          commands:
+            - set -euxo pipefail
+            - echo "[INFO] Installing AWS SSM Agent..."
+            - sudo yum install -y --nogpgcheck https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_amd64/amazon-ssm-agent.rpm
+            - sudo systemctl enable amazon-ssm-agent
+            - sudo systemctl start amazon-ssm-agent
+
+  - name: validate
+    steps:
+      - name: VerifySSMAgent
+        action: ExecuteBash
+        inputs:
+          commands:
+            - echo "[INFO] Verifying SSM Agent installation..."
+            - if ! command -v amazon-ssm-agent >/dev/null 2>&1; then
+                echo "[ERROR] SSM Agent binary not found!" >&2;
+                exit 1;
+              fi
+            - if ! sudo systemctl is-active --quiet amazon-ssm-agent; then
+                echo "[ERROR] SSM Agent service is not running!" >&2;
+                exit 1;
+              fi
+            - echo "[SUCCESS] SSM Agent is installed and running."
