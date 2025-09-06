@@ -1,12 +1,4 @@
 
-data "aws_imagebuilder_image" "rhel" {
-  arn = "arn:aws:imagebuilder:us-east-1:aws:image/red-hat-enterprise-linux-rhel-for-aws-e9ca/2025.6.24"
-}
-
-data "aws_imagebuilder_component" "update_linux" {
-  arn = "arn:aws:imagebuilder:us-east-1:aws:component/update-linux/x.x.x"
-}
-
 # IAM Role for Image Builder EC2 instances
 resource "aws_iam_role" "image_builder_instance_role" {
   name = "EC2ImageBuilderInstanceRole"
@@ -66,10 +58,6 @@ resource "aws_imagebuilder_image_recipe" "stig_recipe" {
     component_arn = data.aws_imagebuilder_component.update_linux.arn
 
   }
-   /* component {
-    component_arn = aws_imagebuilder_component.ssm_install.arn
-    
-  }*/
    component {
     component_arn = aws_imagebuilder_component.node_install.arn
     

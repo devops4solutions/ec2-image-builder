@@ -24,3 +24,12 @@ data "aws_subnets" "private_subnet" {
     values = ["*private*"] # This matches all subnets with a Name tag
   }
 }
+
+
+data "aws_imagebuilder_image" "rhel" {
+  arn = "arn:aws:imagebuilder:us-east-1:aws:image/red-hat-enterprise-linux-rhel-for-aws-e9ca/2025.6.24"
+}
+
+data "aws_imagebuilder_component" "update_linux" {
+  arn = "arn:aws:imagebuilder:us-east-1:aws:component/update-linux/x.x.x"
+}
