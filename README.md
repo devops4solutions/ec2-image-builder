@@ -1,4 +1,11 @@
 # ec2-image-builder
+
+Video Guides
+
+Manual Setup Guide → [Watch here](https://youtu.be/qfSEtPns_YM)
+
+Automation with IaC (Terraform / CloudFormation / Ansible) → [Watch here](https://youtu.be/s32nSe1XE4U)
+
 Infrastructure-as-Code setup for building secure, reusable Amazon Machine Images (AMIs) with AWS EC2 Image Builder.
 
 This repository provides:
